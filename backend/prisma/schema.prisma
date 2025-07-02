@@ -1,0 +1,270 @@
+// Prisma schema for Hebrew AI Agents Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model with Hebrew support
+model User {
+  id              String          @id @default(uuid())
+  email           String          @unique
+  password        String
+  firstName       String          @map("first_name")
+  lastName        String          @map("last_name")
+  hebrewFirstName String?         @map("hebrew_first_name")
+  hebrewLastName  String?         @map("hebrew_last_name")
+  role            UserRole        @default(USER)
+  isActive        Boolean         @default(true) @map("is_active")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  // Relations
+  organizations   UserOrganization[]
+  agents          Agent[]
+  conversations   Conversation[]
+  apiKeys         ApiKey[]
+  
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  DEVELOPER
+  ORGANIZATION_ADMIN
+}
+
+// Organization model
+model Organization {
+  id              String              @id @default(uuid())
+  name            String
+  hebrewName      String?             @map("hebrew_name")
+  slug            String              @unique
+  description     String?
+  plan            SubscriptionPlan    @default(FREE)
+  isActive        Boolean             @default(true) @map("is_active")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  
+  // Relations
+  users           UserOrganization[]
+  agents          Agent[]
+  integrations    Integration[]
+  
+  @@map("organizations")
+}
+
+enum SubscriptionPlan {
+  FREE
+  PLUS
+  TEAM
+  ENTERPRISE
+}
+
+// User-Organization relationship
+model UserOrganization {
+  id             String       @id @default(uuid())
+  userId         String       @map("user_id")
+  organizationId String       @map("organization_id")
+  role           OrgRole      @default(MEMBER)
+  joinedAt       DateTime     @default(now()) @map("joined_at")
+  
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  @@unique([userId, organizationId])
+  @@map("user_organizations")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// AI Agent model
+model Agent {
+  id               String          @id @default(uuid())
+  name             String
+  hebrewName       String?         @map("hebrew_name")
+  description      String?
+  prompt           String          @db.Text
+  model            String          @default("gpt-4")
+  temperature      Float           @default(0.7)
+  maxTokens        Int             @default(2000) @map("max_tokens")
+  language         String          @default("he")
+  isActive         Boolean         @default(true) @map("is_active")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  
+  // Relations
+  creatorId        String          @map("creator_id")
+  organizationId   String          @map("organization_id")
+  creator          User            @relation(fields: [creatorId], references: [id])
+  organization     Organization    @relation(fields: [organizationId], references: [id])
+  
+  conversations    Conversation[]
+  knowledgeBases   KnowledgeBase[]
+  skills           AgentSkill[]
+  
+  @@map("agents")
+}
+
+// Conversation model
+model Conversation {
+  id              String          @id @default(uuid())
+  agentId         String          @map("agent_id")
+  userId          String?         @map("user_id")
+  channel         String          @default("web")
+  status          ConversationStatus @default(ACTIVE)
+  metadata        Json?
+  startedAt       DateTime        @default(now()) @map("started_at")
+  endedAt         DateTime?       @map("ended_at")
+  
+  // Relations
+  agent           Agent           @relation(fields: [agentId], references: [id])
+  user            User?           @relation(fields: [userId], references: [id])
+  messages        Message[]
+  
+  @@map("conversations")
+}
+
+enum ConversationStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+  TRANSFERRED
+}
+
+// Message model
+model Message {
+  id              String          @id @default(uuid())
+  conversationId  String          @map("conversation_id")
+  role            MessageRole
+  content         String          @db.Text
+  metadata        Json?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  conversation    Conversation    @relation(fields: [conversationId], references: [id])
+  
+  @@map("messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  FUNCTION
+}
+
+// Knowledge Base model
+model KnowledgeBase {
+  id              String          @id @default(uuid())
+  name            String
+  description     String?
+  type            KnowledgeType
+  source          String
+  metadata        Json?
+  isActive        Boolean         @default(true) @map("is_active")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  // Relations
+  agentId         String          @map("agent_id")
+  agent           Agent           @relation(fields: [agentId], references: [id])
+  documents       Document[]
+  
+  @@map("knowledge_bases")
+}
+
+enum KnowledgeType {
+  DOCUMENT
+  WEBSITE
+  API
+  DATABASE
+  CUSTOM
+}
+
+// Document model for RAG
+model Document {
+  id              String          @id @default(uuid())
+  knowledgeBaseId String          @map("knowledge_base_id")
+  title           String
+  content         String          @db.Text
+  embedding       Float[]
+  metadata        Json?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  knowledgeBase   KnowledgeBase   @relation(fields: [knowledgeBaseId], references: [id])
+  
+  @@map("documents")
+}
+
+// Agent Skills/Tools
+model AgentSkill {
+  id              String          @id @default(uuid())
+  agentId         String          @map("agent_id")
+  name            String
+  description     String?
+  type            SkillType
+  configuration   Json
+  isActive        Boolean         @default(true) @map("is_active")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  agent           Agent           @relation(fields: [agentId], references: [id])
+  
+  @@map("agent_skills")
+}
+
+enum SkillType {
+  API_CALL
+  DATABASE_QUERY
+  CALCULATION
+  TRANSLATION
+  SENTIMENT_ANALYSIS
+  ENTITY_EXTRACTION
+  CUSTOM
+}
+
+// Integration model
+model Integration {
+  id              String          @id @default(uuid())
+  organizationId  String          @map("organization_id")
+  type            String
+  name            String
+  configuration   Json
+  isActive        Boolean         @default(true) @map("is_active")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  // Relations
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  
+  @@map("integrations")
+}
+
+// API Key model
+model ApiKey {
+  id              String          @id @default(uuid())
+  userId          String          @map("user_id")
+  key             String          @unique
+  name            String
+  permissions     String[]
+  expiresAt       DateTime?       @map("expires_at")
+  lastUsedAt      DateTime?       @map("last_used_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  user            User            @relation(fields: [userId], references: [id])
+  
+  @@map("api_keys")
+}
