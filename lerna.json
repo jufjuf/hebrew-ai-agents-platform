@@ -1,0 +1,23 @@
+{
+  "version": "independent",
+  "npmClient": "npm",
+  "packages": [
+    "packages/*",
+    "frontend",
+    "backend"
+  ],
+  "command": {
+    "publish": {
+      "ignoreChanges": ["*.md", "test/**"],
+      "message": "chore(release): publish",
+      "registry": "https://registry.npmjs.org"
+    },
+    "bootstrap": {
+      "hoist": true
+    },
+    "version": {
+      "allowBranch": ["main", "release/*"],
+      "conventionalCommits": true
+    }
+  }
+}
